@@ -1,3 +1,5 @@
+import numpy as np
+
 def plot_angle_3d(self, ax, origin, v1, v2, angle, num_points=1000, radius=0.5, **kwargs):
         """Plot angle 3d.
         
