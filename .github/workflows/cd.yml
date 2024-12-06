@@ -30,5 +30,5 @@ jobs:
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: docs/build
+          publish_dir: sphinx_documentation/docs/build
           target_branch: gh-pages
