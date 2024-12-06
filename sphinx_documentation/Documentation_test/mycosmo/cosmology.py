@@ -13,8 +13,6 @@ def hubble(redshift, cosmo_dict):
     r"""Hubble Parameter.
 
     Calculate the Hubble parameter at a given redshift using the cosmological parameter values provided.
-    
-    TEST TO SEE IF MY CONTINUOUS DEPLOYMENT WORKS !
 
     Parameters
     ----------
@@ -61,6 +59,8 @@ def critical_density(redshift, cosmo_dict):
     r"""Critical Density.
 
     Calculate the critical density at a given redshift using the cosmological parameter values provided.
+    
+    TEST TO SEE IF MY CONTINUOUS DEPLOYMENT WORKS !
 
     Parameters
     ----------
