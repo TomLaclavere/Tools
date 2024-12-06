@@ -1,4 +1,4 @@
-name: CD
+name: Deploy Documentation
 
 on:
   push:
@@ -6,8 +6,7 @@ on:
      - main
 
 jobs:
-  docs:
-    name: Deploy API Documentation
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
@@ -24,7 +23,6 @@ jobs:
 
       - name: Build API documentation
         run: |
-            rm -rf docs/source/* 
             sphinx-apidoc -Mfeo sphinx_documentation/docs/source sphinx_documentation/mycosmo
             sphinx-build sphinx_documentation/docs/source sphinx_documentation/docs/build
 
