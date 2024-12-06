@@ -25,8 +25,8 @@ jobs:
       - name: Build API documentation
         run: |
             rm -rf docs/source/* 
-            sphinx-apidoc -Mfeo sphinx_documentation/Documentation_test/docs/source sphinx_documentation/Documentation_test/mycosmo
-            sphinx-build sphinx_documentation/Documentation_test/docs/source sphinx_documentation/Documentation_test/docs/build
+            sphinx-apidoc -Mfeo sphinx_documentation/docs/source sphinx_documentation/mycosmo
+            sphinx-build sphinx_documentation/docs/source sphinx_documentation/docs/build
 
       - name: Deploy API documentation
         uses: peaceiris/actions-gh-pages@v4
