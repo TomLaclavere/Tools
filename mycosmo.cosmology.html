@@ -109,7 +109,7 @@
 <p>This function implements the calculation of the critical density as follows:</p>
 <div class="math notranslate nohighlight">
 \[\rho_c(z) = \frac{3H^2(z)}{8\pi G}\]</div>
-<p class="rubric">Example</p>
+<p class="rubric">Examples</p>
 <div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">mycosmo.cosmology</span> <span class="kn">import</span> <span class="n">critical_density</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">cosmo_dict</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;H0&quot;</span><span class="p">:</span> <span class="mi">70</span><span class="p">,</span> <span class="s2">&quot;omega_m_0&quot;</span><span class="p">:</span> <span class="mf">0.3</span><span class="p">,</span> <span class="s2">&quot;omega_k_0&quot;</span><span class="p">:</span> <span class="mf">0.0</span><span class="p">,</span> <span class="s2">&quot;omega_lambda_0&quot;</span><span class="p">:</span> <span class="mf">0.7</span><span class="p">}</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">critical_density</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">cosmo_dict</span><span class="p">)</span>
@@ -149,7 +149,7 @@
 <div class="math notranslate nohighlight">
 \[H(z) = \sqrt{H_0^2 (\Omega_{m,0}(1+z)^3 + \Omega_{k,0}(1+z)^2 +
     \Omega_{\Lambda,0})}\]</div>
-<p class="rubric">Example</p>
+<p class="rubric">Examples</p>
 <div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">mycosmo.cosmology</span> <span class="kn">import</span> <span class="n">hubble</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">cosmo_dict</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;H0&quot;</span><span class="p">:</span> <span class="mi">70</span><span class="p">,</span> <span class="s2">&quot;omega_m_0&quot;</span><span class="p">:</span> <span class="mf">0.3</span><span class="p">,</span> <span class="s2">&quot;omega_k_0&quot;</span><span class="p">:</span> <span class="mf">0.0</span><span class="p">,</span> <span class="s2">&quot;omega_lambda_0&quot;</span><span class="p">:</span> <span class="mf">0.7</span><span class="p">}</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">hubble</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">cosmo_dict</span><span class="p">)</span>
