@@ -60,7 +60,7 @@ def critical_density(redshift, cosmo_dict):
 
     Calculate the critical density at a given redshift using the cosmological parameter values provided.
     
-    2345986724870
+    234598624870
     
     Parameters
     ----------

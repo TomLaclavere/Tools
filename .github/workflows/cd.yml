@@ -24,7 +24,7 @@ jobs:
 
       - name: Build API documentation
         run: |
-            rm -rf docs/source/*.rst  
+            rm -rf docs/source/* 
             sphinx-apidoc -Mfeo sphinx_documentation/Documentation_test/docs/source sphinx_documentation/Documentation_test/mycosmo
             sphinx-build sphinx_documentation/Documentation_test/docs/source sphinx_documentation/Documentation_test/docs/build
 
