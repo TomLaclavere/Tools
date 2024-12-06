@@ -19,7 +19,7 @@ jobs:
           python-version: 3.11
 
       - name: Install dependencies
-        run: python -m pip install myst-parser numpy numpydoc sphinx sphinx_rtd_theme
+        run: python -m pip install myst-parser numpydoc sphinx sphinx_rtd_theme
 
       - name: Build API documentation
         run: |
