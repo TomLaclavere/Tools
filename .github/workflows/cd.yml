@@ -23,7 +23,6 @@ jobs:
 
       - name: Build API documentation
         run: |
-            rm -r *
             sphinx-apidoc -Mfeo sphinx_documentation/docs/source sphinx_documentation/mycosmo
             sphinx-build sphinx_documentation/docs/source sphinx_documentation/docs/build
 
