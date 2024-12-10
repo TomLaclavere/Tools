@@ -59,6 +59,7 @@ def critical_density(redshift, cosmo_dict):
     r"""Critical Density.
 
     Calculate the critical density at a given redshift using the cosmological parameter values provided.
+    kjdfn,dnslkj;fn;snlnksf
         
     Parameters
     ----------
@@ -93,6 +94,7 @@ def critical_density(redshift, cosmo_dict):
     9.203859495267889e-27
 
     """
+    toto = 'JC'
     H_z_si = hubble(redshift, cosmo_dict) * 1e3 / Mpc
 
     return (3.0 * H_z_si**2) / (8.0 * np.pi * G)
