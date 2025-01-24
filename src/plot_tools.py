@@ -1,5 +1,6 @@
 import numpy as np
 import plotly.graph_objects as go
+from getdist import plots, MCSamples
 
 def plot_angle_3d(ax, origin, v1, v2, angle, num_points=1000, radius=0.5, **kwargs):
     """Plot angle 3d.
@@ -134,3 +135,31 @@ def plot_vector(fig, pos, vector, color='blue', name='vector', show_arrow=True, 
                     "Z: %{z:.2f}<extra></extra>" 
                     )
             ))
+
+def triangle_plot(samples_flat, param_names):
+    """Triangle plot.
+
+    Functoin to plot the triangle plot of the samples. Add vertical and horizontal lines at the median of the samples.
+
+    Parameters
+    ----------
+    samples_flat : array_like
+        Flat array from emcee. The shape of the array is (n_walkers x n_samples, n_params).
+    param_names : array_like
+        Array of the parameter names.
+    """
+    mcsamples = MCSamples(samples=samples_flat, names=param_names, labels=param_names)
+
+    best_fit = np.median(samples_flat, axis=0)
+
+    g = plots.get_subplot_plotter()
+    g.settings.num_plot_contours = 3
+    g.triangle_plot(mcsamples, filled=True, markers=param_names)
+
+    for i in range(g.subplots.shape[0]):
+        for j in range(g.subplots.shape[1]):
+            if i >= j:
+                ax = g.subplots[i, j]
+                ax.axvline(best_fit[j], color='grey', ls='--', lw=1.5)
+                if i > j:
+                    ax.axhline(best_fit[i], color='grey', ls='--', lw=1.5)
