@@ -6,7 +6,7 @@ The commands used are the following.
 In the main branch, generate your documentation using Sphinx : 
 
 ```bash
-sphinx quick-start docs/
+sphinx-quickstart docs/
 sphinx-apidoc -Mfeo docs/source module_path
 ```
 
