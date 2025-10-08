@@ -1,7 +1,7 @@
 The tutorial to build documentation using Sphinx can be found following: https://github.com/sfarrens/ecole-euclid-2023?tab=readme-ov-file
 
 The commands used are the following.
-
+  
 # Build Documentation
 In the main branch, generate your documentation using Sphinx : 
 

@@ -9,18 +9,8 @@ mycosmo package
 Submodules
 ----------
 
-mycosmo.constants module
-------------------------
+.. toctree::
+   :maxdepth: 4
 
-.. automodule:: mycosmo.constants
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-mycosmo.cosmology module
-------------------------
-
-.. automodule:: mycosmo.cosmology
-   :members:
-   :undoc-members:
-   :show-inheritance:
+   mycosmo.constants
+   mycosmo.cosmology
