@@ -1,5 +1,6 @@
-import functools
+# Advanced decorator
 import time
+from functools import wraps
 
 import numpy as np
 
@@ -11,7 +12,7 @@ def profile(name=None):
         fn = name
         tag = fn.__name__
 
-        @functools.wraps(fn)
+        @wraps(fn)
         def wrapper(*args, **kwargs):
             t0 = time.perf_counter()
             out = fn(*args, **kwargs)
@@ -27,7 +28,7 @@ def profile(name=None):
     def decorator(fn):
         tag = name or fn.__name__
 
-        @functools.wraps(fn)
+        @wraps(fn)
         def wrapper(*args, **kwargs):
             t0 = time.perf_counter()
             out = fn(*args, **kwargs)
@@ -56,12 +57,12 @@ def get_profiling_stats():
     return stats
 
 
-@profile()
+@profile
 def numpy_sum(x):
     return np.sum(x)
 
 
-@profile()
+@profile
 def python_sum(x):
     sum = 0
     for i in range(len(x)):
