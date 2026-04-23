@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time
 import emcee
+import corner
 from tqdm import tqdm
 import healpy as hp
 from camb import CAMBparams, get_results
@@ -12,7 +13,6 @@ NOISE_UK = 10.0  # white-noise per pixel [µK]
 # lmax = 3×nside is the HEALPix-supported ceiling for TT (spin-0); map2alm iter=3 deconvolves
 # the pixel window reliably in this range. Goes to ell~768: covers peaks 1, 2, and base of 3.
 LMAX_FACTOR = 3  # multiply by nside to get lmax
-TAU_FIXED   = 0.054  # fixed from Planck EE; TT sees only As·e^{-2τ}, so τ is not a TT parameter
 
 # Planck-inspired linear binning (Plik likelihood uses uniform Δell, not log-spaced).
 # Log bins under-sample the acoustic peaks; uniform bins give ~equal modes per bin
@@ -40,19 +40,22 @@ def camb_spectrum(params, lmax):
 
 def bin_spectrum(ell, cl, bin_edges):
     """
-    (2ell+1)-weighted average of C_ell within each bin.
-    Returns (ell_centres, cl_binned, n_modes_per_bin).
+    (2ℓ+1)-weighted bandpower average using vectorised np.digitize + np.bincount.
+    Returns (ell_centres, cl_binned, n_modes_per_bin) for non-empty bins only.
     """
-    centres, cl_b, modes = [], [], []
-    for lo, hi in zip(bin_edges[:-1], bin_edges[1:]):
-        mask = (ell >= lo) & (ell < hi) & (ell > 0)
-        if not mask.any():
-            continue
-        w = 2 * ell[mask] + 1
-        centres.append((w * ell[mask]).sum() / w.sum())
-        cl_b.append((w * cl[mask]).sum() / w.sum())
-        modes.append(w.sum())
-    return np.array(centres), np.array(cl_b), np.array(modes)
+    ell, cl = np.asarray(ell, dtype=float), np.asarray(cl, dtype=float)
+    mask = (ell > 0) & (ell >= bin_edges[0]) & (ell < bin_edges[-1])
+    el, cl_ = ell[mask], cl[mask]
+    w   = 2 * el + 1
+    idx = np.digitize(el, bin_edges) - 1   # 0-indexed bin for each mode
+    n   = len(bin_edges) - 1
+
+    W   = np.bincount(idx, weights=w,        minlength=n)
+    Wel = np.bincount(idx, weights=w * el,   minlength=n)
+    Wcl = np.bincount(idx, weights=w * cl_,  minlength=n)
+
+    valid = W > 0
+    return Wel[valid] / W[valid], Wcl[valid] / W[valid], W[valid]
 
 
 def to_dl(ell, cl):
@@ -67,8 +70,8 @@ class CMBAnalyzer:
         self.nside = nside
         self.lmax = LMAX_FACTOR * nside
         self.npix = 12 * nside**2
-        self.N_ell = noise_uk**2 * 4 * np.pi / self.npix
-        self._noise_uk = noise_uk
+        self.N_ell    = noise_uk**2 * 4 * np.pi / self.npix
+        self.noise_uk = noise_uk
 
         # Planck-inspired hybrid linear binning:
         #   fine bins (Δell=DELTA_ELL_LO) at low ell to resolve the Sachs-Wolfe plateau
@@ -83,9 +86,8 @@ class CMBAnalyzer:
         Also returns the unbinned (ell, cl_obs) for plotting.
         """
         _, cl_true = camb_spectrum(params_true, self.lmax)
-        sky = hp.alm2map(hp.synalm(cl_true, lmax=self.lmax), nside=self.nside)
-        noise = np.random.normal(0, self._noise_uk, self.npix)
-        sky += noise
+        sky  = hp.alm2map(hp.synalm(cl_true, lmax=self.lmax), nside=self.nside)
+        sky += np.random.normal(0, self.noise_uk, self.npix)
 
         cl_obs = hp.alm2cl(hp.map2alm(sky, lmax=self.lmax))
         ell_obs = np.arange(len(cl_obs), dtype=float)
@@ -108,8 +110,8 @@ class CMBAnalyzer:
         """
 
         param_keys = ["omch2", "ombh2", "H0", "As"]
-        bound_lo = np.array([0.05,  0.010, 50.0, 1.5e-9])
-        bound_hi = np.array([0.30,  0.050, 90.0, 3.5e-9])
+        bound_lo = np.array([0.05, 0.010, 50.0, 1.5e-9])
+        bound_hi = np.array([0.30, 0.050, 90.0, 3.5e-9])
 
         def log_prior(p):
             if np.any(p < bound_lo) or np.any(p > bound_hi):
@@ -132,8 +134,8 @@ class CMBAnalyzer:
 
         # Initialise walkers as a tight ball around Planck-like fiducial values.
         rng = np.random.default_rng(42)
-        p0_center = np.array([0.12,  0.022, 67.3, 2.1e-9])
-        p0_sigma  = np.array([0.01,  0.002,  2.0, 0.1e-9])
+        p0_center = np.array([0.12, 0.022, 67.3, 2.1e-9])
+        p0_sigma = np.array([0.01, 0.002, 2.0, 0.1e-9])
         p0 = p0_center + p0_sigma * rng.standard_normal((n_walkers, 4))
 
         sampler = emcee.EnsembleSampler(n_walkers, 4, log_posterior)
@@ -157,20 +159,24 @@ class CMBAnalyzer:
     # ── Diagnostic plots ─────────────────────────────────────────────────────
     def plot_walkers(self, sampler, params_true, n_burn):
         """Plot MCMC walker chains for each parameter."""
-        chain = sampler.get_chain()  # (n_steps, n_walkers, n_params)
-        # As is displayed as ln(10^10 As) — the standard cosmology convention (~3.04)
-        chain_plot       = chain.copy()
-        chain_plot[:, :, 3] = np.log(chain_plot[:, :, 3] * 1e10)
+        chain = sampler.get_chain()  # (n_chain_steps, n_walkers, n_params)
+        # As displayed as ln(10^10 As) — the standard cosmology convention (~3.04)
+        chain_As_log = np.log(chain[:, :, 3] * 1e10)
         labels = [r"$\Omega_c h^2$", r"$\Omega_b h^2$", r"$H_0$", r"$\ln(10^{10}A_s)$"]
-        truths = [params_true["omch2"], params_true["ombh2"], params_true["H0"],
-                  np.log(params_true["As"] * 1e10)]
-        n_steps, n_walkers, _ = chain.shape
+        truths = [
+            params_true["omch2"],
+            params_true["ombh2"],
+            params_true["H0"],
+            np.log(params_true["As"] * 1e10),
+        ]
+        n_chain_steps, n_walkers, _ = chain.shape
 
         fig, axes = plt.subplots(4, 1, figsize=(10, 8), sharex=True)
         for i, (ax, label, truth) in enumerate(zip(axes, labels, truths)):
-            ax.plot(chain_plot[:, :, i], "k-", alpha=0.08, linewidth=0.7)
+            data = chain_As_log if i == 3 else chain[:, :, i]
+            ax.plot(data, "k-", alpha=0.08, linewidth=0.7)
             ax.plot(
-                np.median(chain_plot[:, :, i], axis=1),
+                np.median(data, axis=1),
                 "tab:blue",
                 linewidth=1.5,
                 label="Median" if i == 0 else "",
@@ -197,20 +203,16 @@ class CMBAnalyzer:
 
     def plot_corner(self, flat_samples, params_true):
         """Triangle (corner) plot of the marginalised posterior."""
-        try:
-            import corner
-        except ImportError:
-            import subprocess
-
-            subprocess.check_call(["pip", "install", "corner"])
-            import corner
-
         # Transform As → ln(10^10 As) for readable axis values
-        samples_plot    = flat_samples.copy()
+        samples_plot = flat_samples.copy()
         samples_plot[:, 3] = np.log(samples_plot[:, 3] * 1e10)
         labels = [r"$\Omega_c h^2$", r"$\Omega_b h^2$", r"$H_0$", r"$\ln(10^{10}A_s)$"]
-        truths = [params_true["omch2"], params_true["ombh2"], params_true["H0"],
-                  np.log(params_true["As"] * 1e10)]
+        truths = [
+            params_true["omch2"],
+            params_true["ombh2"],
+            params_true["H0"],
+            np.log(params_true["As"] * 1e10),
+        ]
 
         fig = corner.corner(
             samples_plot,
@@ -277,7 +279,7 @@ class CMBAnalyzer:
         # ── Parameter recovery ────────────────────────────────────────────────
         for col, (key, label) in enumerate(
             zip(
-                ["omch2",          "ombh2",          "H0",   "As"],
+                ["omch2", "ombh2", "H0", "As"],
                 [r"$\Omega_c h^2$", r"$\Omega_b h^2$", r"$H_0$", r"$A_s\ [10^{-9}]$"],
             )
         ):
@@ -285,7 +287,7 @@ class CMBAnalyzer:
             # Display As in units of 10^-9 for readability
             scale = 1e9 if key == "As" else 1.0
             t = params_true[key] * scale
-            f = params_fit[key]  * scale
+            f = params_fit[key] * scale
             err = 100 * (f - t) / t
             clr = "tab:green" if abs(err) < 5 else "tab:orange" if abs(err) < 20 else "tab:red"
             ax.bar(["True", "Fitted"], [t, f], color=["steelblue", clr], alpha=0.85, width=0.5)
@@ -341,10 +343,10 @@ def main():
     print(f"\n{'Parameter':<15} {'True':<12} {'Fitted':<12} {'Error %'}")
     print("-" * 55)
     for key, name, scale in [
-        ("omch2", "Ωc h²",    1),
-        ("ombh2", "Ωb h²",    1),
-        ("H0",    "H₀",       1),
-        ("As",    "As [1e-9]", 1e9),
+        ("omch2", "Ωc h²", 1),
+        ("ombh2", "Ωb h²", 1),
+        ("H0", "H₀", 1),
+        ("As", "As [1e-9]", 1e9),
     ]:
         t, f = params_true[key] * scale, params_fit[key] * scale
         print(f"{name:<15} {t:<12.5f} {f:<12.5f} {100 * abs(f - t) / t:.2f}%")
