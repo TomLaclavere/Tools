@@ -12,6 +12,7 @@ NOISE_UK = 10.0  # white-noise per pixel [µK]
 # lmax = 3×nside is the HEALPix-supported ceiling for TT (spin-0); map2alm iter=3 deconvolves
 # the pixel window reliably in this range. Goes to ell~768: covers peaks 1, 2, and base of 3.
 LMAX_FACTOR = 3  # multiply by nside to get lmax
+TAU_FIXED   = 0.054  # fixed from Planck EE; TT sees only As·e^{-2τ}, so τ is not a TT parameter
 
 # Planck-inspired linear binning (Plik likelihood uses uniform Δell, not log-spaced).
 # Log bins under-sample the acoustic peaks; uniform bins give ~equal modes per bin
@@ -23,12 +24,14 @@ ELL_BREAK = 50  # transition multipole between fine and coarse binning
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def camb_spectrum(params, lmax):
-    """Return (ell, C_ell) [µK²] from CAMB."""
+    """Return (ell, C_ell) [µK²] from CAMB.
+
+    Free parameters: omch2, ombh2, H0, As.
+    ns and tau are left at CAMB defaults (ns=0.96, tau~0.054).
+    """
     p = CAMBparams()
-    p.set_cosmology(
-        H0=params["H0"], ombh2=params["ombh2"], omch2=params["omch2"], tau=params["tau"]
-    )
-    p.InitPower.set_params(ns=0.96)
+    p.set_cosmology(H0=params["H0"], ombh2=params["ombh2"], omch2=params["omch2"])
+    p.InitPower.set_params(ns=0.96, As=params.get("As", 2.1e-9))
     p.set_for_lmax(lmax, lens_potential_accuracy=0)
     powers = get_results(p).get_cmb_power_spectra(p, CMB_unit="muK", raw_cl=True)
     cl = powers["total"][: lmax + 1, 0]
@@ -104,16 +107,14 @@ class CMBAnalyzer:
         best_params = posterior medians.
         """
 
-        param_keys = ["omch2", "ombh2", "H0", "tau"]
-        bound_lo = np.array([0.05, 0.010, 50.0, 0.010])
-        bound_hi = np.array([0.30, 0.050, 90.0, 0.200])
+        param_keys = ["omch2", "ombh2", "H0", "As"]
+        bound_lo = np.array([0.05,  0.010, 50.0, 1.5e-9])
+        bound_hi = np.array([0.30,  0.050, 90.0, 3.5e-9])
 
         def log_prior(p):
             if np.any(p < bound_lo) or np.any(p > bound_hi):
                 return -np.inf
-            # Gaussian prior on τ: TT sees only As·e^{-2τ}, so τ must be anchored
-            # by polarization data. We encode the Planck EE constraint τ = 0.054 ± 0.007.
-            return -0.5 * ((p[3] - 0.054) / 0.007) ** 2
+            return 0.0  # flat prior within bounds
 
         def log_likelihood(p):
             try:
@@ -131,8 +132,8 @@ class CMBAnalyzer:
 
         # Initialise walkers as a tight ball around Planck-like fiducial values.
         rng = np.random.default_rng(42)
-        p0_center = np.array([0.12, 0.022, 67.3, 0.054])
-        p0_sigma = np.array([0.01, 0.002, 2.0, 0.005])
+        p0_center = np.array([0.12,  0.022, 67.3, 2.1e-9])
+        p0_sigma  = np.array([0.01,  0.002,  2.0, 0.1e-9])
         p0 = p0_center + p0_sigma * rng.standard_normal((n_walkers, 4))
 
         sampler = emcee.EnsembleSampler(n_walkers, 4, log_posterior)
@@ -157,15 +158,19 @@ class CMBAnalyzer:
     def plot_walkers(self, sampler, params_true, n_burn):
         """Plot MCMC walker chains for each parameter."""
         chain = sampler.get_chain()  # (n_steps, n_walkers, n_params)
-        labels = [r"$\Omega_c h^2$", r"$\Omega_b h^2$", r"$H_0$", r"$\tau$"]
-        truths = [params_true["omch2"], params_true["ombh2"], params_true["H0"], params_true["tau"]]
+        # As is displayed as ln(10^10 As) — the standard cosmology convention (~3.04)
+        chain_plot       = chain.copy()
+        chain_plot[:, :, 3] = np.log(chain_plot[:, :, 3] * 1e10)
+        labels = [r"$\Omega_c h^2$", r"$\Omega_b h^2$", r"$H_0$", r"$\ln(10^{10}A_s)$"]
+        truths = [params_true["omch2"], params_true["ombh2"], params_true["H0"],
+                  np.log(params_true["As"] * 1e10)]
         n_steps, n_walkers, _ = chain.shape
 
         fig, axes = plt.subplots(4, 1, figsize=(10, 8), sharex=True)
         for i, (ax, label, truth) in enumerate(zip(axes, labels, truths)):
-            ax.plot(chain[:, :, i], "k-", alpha=0.08, linewidth=0.7)
+            ax.plot(chain_plot[:, :, i], "k-", alpha=0.08, linewidth=0.7)
             ax.plot(
-                np.median(chain[:, :, i], axis=1),
+                np.median(chain_plot[:, :, i], axis=1),
                 "tab:blue",
                 linewidth=1.5,
                 label="Median" if i == 0 else "",
@@ -200,11 +205,15 @@ class CMBAnalyzer:
             subprocess.check_call(["pip", "install", "corner"])
             import corner
 
-        labels = [r"$\Omega_c h^2$", r"$\Omega_b h^2$", r"$H_0$", r"$\tau$"]
-        truths = [params_true["omch2"], params_true["ombh2"], params_true["H0"], params_true["tau"]]
+        # Transform As → ln(10^10 As) for readable axis values
+        samples_plot    = flat_samples.copy()
+        samples_plot[:, 3] = np.log(samples_plot[:, 3] * 1e10)
+        labels = [r"$\Omega_c h^2$", r"$\Omega_b h^2$", r"$H_0$", r"$\ln(10^{10}A_s)$"]
+        truths = [params_true["omch2"], params_true["ombh2"], params_true["H0"],
+                  np.log(params_true["As"] * 1e10)]
 
         fig = corner.corner(
-            flat_samples,
+            samples_plot,
             labels=labels,
             truths=truths,
             quantiles=[0.16, 0.5, 0.84],
@@ -268,13 +277,15 @@ class CMBAnalyzer:
         # ── Parameter recovery ────────────────────────────────────────────────
         for col, (key, label) in enumerate(
             zip(
-                ["omch2", "ombh2", "H0", "tau"],
-                [r"$\Omega_c h^2$", r"$\Omega_b h^2$", r"$H_0$", r"$\tau$"],
+                ["omch2",          "ombh2",          "H0",   "As"],
+                [r"$\Omega_c h^2$", r"$\Omega_b h^2$", r"$H_0$", r"$A_s\ [10^{-9}]$"],
             )
         ):
             ax = fig.add_subplot(gs[1, col])
-            t = params_true[key]
-            f = params_fit[key]
+            # Display As in units of 10^-9 for readability
+            scale = 1e9 if key == "As" else 1.0
+            t = params_true[key] * scale
+            f = params_fit[key]  * scale
             err = 100 * (f - t) / t
             clr = "tab:green" if abs(err) < 5 else "tab:orange" if abs(err) < 20 else "tab:red"
             ax.bar(["True", "Fitted"], [t, f], color=["steelblue", clr], alpha=0.85, width=0.5)
@@ -306,7 +317,7 @@ def main():
     print("CMB Power Spectrum Analysis")
     print("=" * 60)
 
-    params_true = {"omch2": 0.120, "ombh2": 0.0224, "H0": 67.3, "tau": 0.055}
+    params_true = {"omch2": 0.120, "ombh2": 0.0224, "H0": 67.3, "As": 2.1e-9}
     analyzer = CMBAnalyzer(nside=NSIDE, noise_uk=NOISE_UK)
 
     n_bins_eff = len(analyzer.bin_edges) - 1
@@ -329,8 +340,13 @@ def main():
     print("\n" + "=" * 60 + "\nRESULTS (posterior medians)\n" + "=" * 60)
     print(f"\n{'Parameter':<15} {'True':<12} {'Fitted':<12} {'Error %'}")
     print("-" * 55)
-    for key, name in [("omch2", "Ωc h²"), ("ombh2", "Ωb h²"), ("H0", "H₀"), ("tau", "τ")]:
-        t, f = params_true[key], params_fit[key]
+    for key, name, scale in [
+        ("omch2", "Ωc h²",    1),
+        ("ombh2", "Ωb h²",    1),
+        ("H0",    "H₀",       1),
+        ("As",    "As [1e-9]", 1e9),
+    ]:
+        t, f = params_true[key] * scale, params_fit[key] * scale
         print(f"{name:<15} {t:<12.5f} {f:<12.5f} {100 * abs(f - t) / t:.2f}%")
     print("\n" + "=" * 60)
 
