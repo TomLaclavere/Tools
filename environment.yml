@@ -1,4 +1,4 @@
-name: env-tools
+name: venv-tools
 channels:
   - conda-forge
   - nodefaults
@@ -88,4 +88,4 @@ dependencies:
       - plotly==6.0.0
       - pyparsing==3.2.1
       - scipy==1.15.1
-prefix: /home/tlaclavere/miniconda3/envs/env-tools
+prefix: /home/tlaclavere/miniconda3/envs/venv-tools
